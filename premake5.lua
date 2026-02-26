@@ -1,7 +1,7 @@
 project "ImGui"
 	kind "StaticLib"
 	language "C++"
-    staticruntime "off"
+        staticruntime "off"
 
 	targetdir ("../../build/bin/" .. outputdir .. "/%{prj.name}")
 	objdir ("../../build/bin-int/" .. outputdir .. "/%{prj.name}")
@@ -21,10 +21,10 @@ project "ImGui"
 		"imgui_demo.cpp",
 		"misc/cpp/imgui_stdlib.cpp",
 		"misc/cpp/imgui_stdlib.h",
-		"backends/imgui_impl_sdl2.cpp",
-		"backends/imgui_impl_sdl2.h",
-		"backends/imgui_impl_sdlrenderer2.cpp",
-		"backends/imgui_impl_sdlrenderer2.h"
+		"backends/imgui_impl_sdl3.cpp",
+		"backends/imgui_impl_sdl3.h",
+		"backends/imgui_impl_sdlrenderer3.cpp",
+		"backends/imgui_impl_sdlrenderer3.h"
 	}
 
 	includedirs{
