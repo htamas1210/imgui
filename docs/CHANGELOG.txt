@@ -41,16 +41,6 @@ HOW TO UPDATE?
 
 Breaking Changes:
 
- - Changed default ImTextureID_Invalid value to -1 instead of 0 if not #define-d.
-    (#9293, #8745, #8465, #7090)
-   - It seems like a better default since it will work with backends storing
-     indices or memory offsets inside ImTextureID, where 0 might be a valid value.
-   - If this is causing problem with e.g your custom ImTextureID definition, you can
-     add '#define ImTextureID_Invalid 0' to your imconfig.h + PLEASE report this to GitHub.
-   - If you have hardcoded e.g. 'if (tex_id == 0)' checks they should be updated.
-     e.g. OpenGL2, OpenGL3 and SDLRenderer3 backends incorrectly had 'IM_ASSERT(tex->TexID == 0)'
-     lines which were replaced with 'IM_ASSERT(tex->TexID == ImTextureID_Invalid)'.
-     If you have copied or forked backends consider fixing locally. (#9295)
  - Separator(): fixed a legacy quirk where Separator() was submitting a zero-height
    item for layout purpose, even though it draws a 1-pixel separator.
    The fix could affect code e.g. computing height from multiple widgets in order to
@@ -63,6 +53,8 @@ Breaking Changes:
       BeginChild("ScrollingRegion", { 0, -footer_height });
    When such idiom was used and assuming zero-height Separator, it is likely that
    in 1.92.7 the resulting window will have unexpected 1 pixel scrolling range.
+ - Multi-Select: renamed ImGuiMultiSelectFlags_SelectOnClick to ImGuiMultiSelectFlags_SelectOnAuto.
+   Kept inline redirection enum (will obsolete).
  - Combo(), ListBox(): commented out legacy signatures which were obsoleted in 1.90
    (Nov 2023), when the getter callback type was changed from:
       getter type:   bool (*getter)(void* user_data, int idx, const char** out_text)
@@ -87,6 +79,35 @@ Other Changes:
     signals to be emitted the same way regardless of that setting. (#9001, #9115)
   - Fixed a glitch when using ImGuiInputTextFlags_ElideLeft where the local x offset
     would be incorrect during the deactivation frame. (#9298)
+  - Fixed a crash introduced in 1.92.6 when handling ImGuiInputTextFlags_CallbackResize
+    in certain situations. (#9174)
+  - Fixed selection highlight Y1 offset being very slightly off (since 1.92.3). (#9311) [@v-ein]
+  - InputTextMultiline: fixed an issue introduced in 1.92.3 where line count calculated
+    for vertical scrollbar range would be +1 when the widget is inactive, word-wrap is
+    disabled and the text buffer ends with '\n'. Fixed a similar issue related to clipping
+    large amount of text.
+  - InputTextMultiline: avoid going through reactivation code and fixed losing revert value
+    when activating scrollbar.
+  - InputTextMultiline: fixed an issue where edit buffer wouldn't be reapplied to back
+    buffer on the IsItemDeactivatedAfterEdit() frame. This could create issues when
+    using the idiom of not applying edits before IsItemDeactivatedAfterEdit().
+    (#9308, #8915, #8273)
+- Tables:
+  - Allow reordering columns by dragging them in the context menu. (#9312)
+  - Context menu now presents columns in display order. (#9312)
+  - Fixed and clarified the behavior of using TableSetupScrollFreeze() with columns>1,
+    and where some of the columns within that range were Hidable.
+    - Before: TableSetupScrollFreeze(N, 0) made the first N _visible_ columns
+              part of the scroll freeze. So if you intentionally hide columns <N
+              the scroll freeze area would encompass the subsequent right columns.
+    - After:  TableSetupScrollFreeze(N, 0) makes the first N _declared_ columns
+              part of the scroll freeze. So if you intentionally hide columns <N
+              the scroll freeze area will cover less columns.
+    - This is generally more sane and logical.
+  - Fixed dragging a header to reorder outside of visible bounds (due to horizontal scrolling)
+    from losing active id.
+  - Angled Headers: angled section for column being reordered via the regular headers
+    stays highlighted during reordering.
 - Style:
   - Border sizes are now scaled (and rounded) by ScaleAllSizes().
   - When using large values with ScallAllSizes(), the following items thickness
@@ -107,22 +128,56 @@ Other Changes:
     BeginPopupContextItem(), BeginPopupContextWindow() or OpenPopupOnItemClick().
     (#8803, #9270) [@exelix11, @ocornut]
   - Popups: pressing North button (PS4/PS5 triangle, SwitchX, Xbox Y) also open popups menus.
+- Multi-Select:
+  - Added ImGuiMultiSelectFlags_SelectOnClickAlways mode (rarely used).
+    This prevents Drag and Drop of multiple items, but it allows to start a new Box-Selection
+    from inside an existing selection (Excel style). (#9307, #1861)
 - Clipper:
   - Clear `DisplayStart`/`DisplayEnd` fields when `Step()` returns false.
   - Added `UserIndex` helper storage. This is solely a convenience for cases where
     you may want to carry an index around.
+  - Always pulls current context on `ImGuiListClipper::Begin()`, consistent with public
+    API design, and avoids issues with clipper instances outliving contexts. (#9324, #5856)
 - Scrollbar:
   - Implemented a custom tweak to extend hit-testing bounding box when window is sitting
     at the edge of a viewport (e.g. fullscreen or docked window), so that e.g. mouse the
     mouse at the extreme of the screen will reach the scrollbar. (#9276)
+  - Fixed an issue which could lead initial click to move the current scroll by a pixel.
+- Button:
+  - Moved ImGuiButtonFlags_AllowOverlap from imgui_internal.h to imgui.h,
+    as a convenience for when using e.g. InvisibleButton().
 - Focus: fixed fallback "Debug" window temporarily taking focus and setting io.WantCaptureKeyboard
   for one frame on e.g. application boot if no other windows are submitted. (#9243)
+- DrawList:
+  - PathArcTo(): fixed erroneous segment count for pathologically small arcs on large 
+    circles. (#9331, #9313) [@thedmd, @epajarre]
+- Memory:
+  - Discard/GC of ImDrawList buffers for unused windows favor restoring them to
+    ~Size*1.05 instead of Capacity when awakening again. Facilitate releasing ImDrawList
+    buffers after unusual usage spike. (#9303)
+  - Fixed GetForegroundDrawList()/GetBackgroundDrawList() per-viewport buffers not being
+    collected when unused for io.ConfigMemoryCompactTimer amount of time. (#9303)
 - Demo: fixed IMGUI_DEMO_MARKER locations for examples applets. (#9261, #3689) [@pthom]
+- Misc: added missing ImVec2/ImVec4 operators. (#9339, #8258) [@dkosmari, @ArashPartow]
+- Internals:
+  - ButtonBehavior: fixed internal/low-level ImGuiButtonFlags_PressedOnRelease
+    (as well as equivalent ImGuiSelectableFlags_SelectOnRelease for Selectable) from
+    not taking current active id. ImGuiButtonFlags_NoHoldingActiveID allows that.
+    This was pretty sure only used internally by MenuItem().
 - Backends:
+  - DirectX9, OpenGL2, OpenGL3, Metal, SDLGPU3, SDLRenderer2, SDLRenderer3: fixed easy-to-fix
+    issues in code assuming ImTextureID_Invalid is always defined to 0. (#9295, #9310)
+  - GLFW: mouse cursor is properly restored if changed by user app/code while using
+    glfwSetInputMode(..., GLFW_CURSOR_DISABLED) or ImGuiConfigFlags_NoMouseCursorChange.
+    Amend optimization done in 1.92.6.
   - SDLGPU3: removed unnecessary call to SDL_WaitForGPUIdle when releasing
     vertex/index buffers. (#9262) [@jaenis]
   - WebGPU: fixed version check for Emscripten 5.0.0+.
   - WebGPU: removed support for Emscripten <4.0.10. (#9281) [@ypujante]
+  - WebGPU: added support for WGVK native backend via IMGUI_IMPL_WEBGPU_BACKEND_WGVK,
+    using SPIRV shaders if WGSL is not available. (#9316, #9246, #9257) [@r-lyeh]
+    (WGVK is a lightweight alternative to Dawn or WGPU for native applications,
+    which is easier to build/setup, see: https://github.com/manuel5975p/WGVK)
 - Examples:
   - Emscripten: added `tabindex=-1` to canvas in our shell_minimal.htm. Without it,
     the canvas was not focusable in the DOM, which in turn make some backends
@@ -137,7 +192,8 @@ Other Changes:
   - WebGPU: fixed undefined behaviors in example code for requesting adapter
     and device. (#9246, #9256) [@r-lyeh]
   - SDL2+WebGPU: fixed hi-dpi handling. (#9300) [@ypujante]
-  - GLFW/SDL2/SDL3+WebGPU: removed suport for Emscripten <4.0.10. (#9281) [@ypujante]
+  - GLFW/SDL2/SDL3+WebGPU: added support for WGVK. (#9316, #9246, #9257) [@r-lyeh, @ocornut]
+  - GLFW/SDL2/SDL3+WebGPU: removed support for Emscripten <4.0.10. (#9281) [@ypujante]
 
 Docking+Viewports Branch:
 
@@ -149,6 +205,11 @@ Docking+Viewports Branch:
   - Backends: SDL2, SDL3: fixed an issue dated 2025/04/09 (1.92 WIP) where a refactor
     and a merge caused ImGuiBackendFlags_HasMouseHoveredViewport to never be set, causing
     foreign windows to be ignored when deciding of hovered viewport. (#9284) [@ravencgg]
+  - Backends: SDL3: use SDL_HAS_EVENT_DISPLAY_USABLE_BOUNDS_CHANGED (SDL 3.4.0+) when
+    available to avoid refreshing monitor work area every frame on Windows. (#8415)
+  - Backends: Win32: fixed setting/getting correct size when viewports have OS decorations
+    enabled (e.g. io.ConfigViewportsNoDecoration = false) and process is running in
+    Per-Monitor V2 DPI mode. (#8897) [@lailoken]
 
 
 -----------------------------------------------------------------------
